@@ -2,7 +2,10 @@ package edu.buffalo.cse.cse486586.groupmessenger2;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
+import android.content.UriMatcher;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.util.Log;
 
@@ -25,6 +28,32 @@ import android.util.Log;
  *
  */
 public class GroupMessengerProvider extends ContentProvider {
+
+    private Database_Helper database_helper;
+
+    private final static String AUTHORITY = "edu.buffalo.cse.cse486586.groupmessenger2.provider";
+    private final static String PROVIDER_URI = "content://" + AUTHORITY;
+
+    private static final int KEYS = 1;
+    private static final int KEY_ID = 2;
+
+    private static final int TESTER_ACCESS = 3;
+
+    private static final UriMatcher URI_MATCHER;
+
+    static {
+        URI_MATCHER = new UriMatcher(UriMatcher.NO_MATCH);
+        URI_MATCHER.addURI(AUTHORITY,
+                "keys",
+                KEYS);
+        URI_MATCHER.addURI(AUTHORITY,
+                "keys/#",
+                KEY_ID);
+        URI_MATCHER.addURI(PROVIDER_URI,
+                "",
+                TESTER_ACCESS);
+    }
+
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
@@ -51,13 +80,46 @@ public class GroupMessengerProvider extends ContentProvider {
          * take a look at the code for PA1.
          */
         Log.v("insert", values.toString());
-        return uri;
+
+        SQLiteDatabase db = database_helper.getWritableDatabase();
+
+
+        Uri.Builder uriBuilder = new Uri.Builder();
+        uriBuilder.authority("edu.buffalo.cse.cse486586.groupmessenger1.provider");
+        uriBuilder.scheme("content");
+        Uri tester_uri = uriBuilder.build();
+
+
+
+        if (uri.toString().equals(tester_uri.toString())) {
+            long id = db.insert(Key_Value_Contract.TABLE_NAME, null, values);
+            return uri;
+        } else {
+            throw new IllegalArgumentException(
+                    "Unsupported URI for insertion: " + uri);
+        }
+
+        /*else if (URI_MATCHER.match(uri) != KEYS
+                && URI_MATCHER.match(uri) != KEY_ID) {
+            throw new IllegalArgumentException(
+                    "Unsupported URI for insertion: " + uri);
+        }
+        else if (URI_MATCHER.match(uri) == KEY_ID) {
+            long id = db.insert(Key_Value_Contract.TABLE_NAME, null, values);
+            return uri;
+            //return Uri.parse(CONTENT_URI + "/" + id);
+        }
+        else {
+            return uri;
+        }*/
+
     }
 
     @Override
     public boolean onCreate() {
         // If you need to perform any one-time initialization task, please do it here.
-        return false;
+        database_helper = new Database_Helper(getContext());
+        return true;
     }
 
     @Override
@@ -80,7 +142,46 @@ public class GroupMessengerProvider extends ContentProvider {
          * recommend building a MatrixCursor described at:
          * http://developer.android.com/reference/android/database/MatrixCursor.html
          */
-        Log.v("query", selection);
-        return null;
+
+        SQLiteDatabase db = database_helper.getReadableDatabase();
+        SQLiteQueryBuilder sqLiteQueryBuilder = new SQLiteQueryBuilder();
+
+        Uri.Builder uriBuilder = new Uri.Builder();
+        uriBuilder.authority("edu.buffalo.cse.cse486586.groupmessenger1.provider");
+        uriBuilder.scheme("content");
+        Uri tester_uri = uriBuilder.build();
+
+
+
+        if (uri.toString().equals(tester_uri.toString())) {
+            sqLiteQueryBuilder.setTables(Key_Value_Contract.TABLE_NAME);
+            // limit query to one row at most:
+
+            //sqLiteQueryBuilder.appendWhere("key = key1");
+            sqLiteQueryBuilder.appendWhere(Key_Value_Contract.COLUMN_KEY + " = " + "'" + selection + "'");
+            //builder.appendWhere(Key_Value_Contract.UID + " = "
+            //        + uri.getLastPathSegment());
+
+            Cursor cursor = sqLiteQueryBuilder.query(db, Key_Value_Contract.PROJECTION, null, null,
+                    null, null, sortOrder);
+            return cursor;
+        } else {
+            throw new IllegalArgumentException(
+                    "Unsupported URI for insertion: " + uri);
+        }
+
+        /*if (URI_MATCHER.match(uri) == KEY_ID || URI_MATCHER.match(uri) == TESTER_ACCESS) {
+
+            builder.setTables(Key_Value_Contract.TABLE_NAME);
+            // limit query to one row at most:
+            builder.appendWhere(Key_Value_Contract.UID + " = "
+                    + uri.getLastPathSegment());
+
+            Cursor cursor = builder.query(db, projection, selection, selectionArgs,
+                    null, null, sortOrder);
+            return cursor;
+
+        }*/
+
     }
 }
