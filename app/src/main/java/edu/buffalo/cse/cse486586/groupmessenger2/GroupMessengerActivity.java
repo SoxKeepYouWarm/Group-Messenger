@@ -153,7 +153,7 @@ public class GroupMessengerActivity extends Activity {
                 PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
                 writer.println(Double.toString(proposed_seq));
             } catch (IOException e) {
-                Log.e("ERROR", "error getting printwriter");
+                Log.e(TAG, "error getting printwriter");
             }
 
         }
@@ -177,7 +177,7 @@ public class GroupMessengerActivity extends Activity {
                 if ((pid == holding_pid) && (msg_id == holding_msg_id)) {
                     hold_back_queue.remove(holding_msg);
                     debug_delivery_queue.add(holding_msg);
-                    Log.d("OUTPUT", msg + " received with final_seq_num: " + final_seq_num);
+                    Log.d(TAG, msg + " received with final_seq_num: " + final_seq_num);
                     // TODO: Save this message to content provider
                 }
 
@@ -199,6 +199,8 @@ public class GroupMessengerActivity extends Activity {
                     String message;
                     if ((message = in.readLine()) != null) {
 
+                        Log.d(TAG, "server accepted client message");
+
                         boolean is_proposal = message.contains(BREAK_MSG_PROPOSAL);
                         if (is_proposal) {
                             handle_message_proposal(message, clientSocket);
@@ -212,9 +214,9 @@ public class GroupMessengerActivity extends Activity {
                 }
 
             } catch (NullPointerException err) {
-                Log.d("error", "client socket was not initialized properly");
+                Log.e(TAG, "client socket was not initialized properly");
             } catch (IOException err) {
-                Log.d("error", "client socket was not initialized properly");
+                Log.e(TAG, "client socket was not initialized properly");
             }
 
             return null;
@@ -245,14 +247,14 @@ public class GroupMessengerActivity extends Activity {
 
                     // send out formatted message
                     String message_wrapper = message + BREAK_MSG_PROPOSAL +
-                            Integer.toString(get_pid_from_port(MY_PORT)) +
+                            Integer.toString(get_pid_from_port(MY_PORT)) + BREAK_MSG_PROPOSAL +
                             msg_id + BREAK_MSG_PROPOSAL;
 
                     PrintWriter out = new PrintWriter(client_socket.getOutputStream(), true);
                     out.println(message_wrapper);
 
                     // set 500ms timeout for response
-                    client_socket.setSoTimeout(500);
+                    //client_socket.setSoTimeout(500);
 
                     try {
 
@@ -261,6 +263,7 @@ public class GroupMessengerActivity extends Activity {
                         String input;
                         if ((input = in.readLine()) != null) {
                             // check for new max sequence num
+                            Log.d(TAG, "just got message back from server");
                             Double proposed_sequence_number = Double.parseDouble(input);
                             final_sequence_number = Math.max(final_sequence_number, proposed_sequence_number);
 
@@ -268,7 +271,7 @@ public class GroupMessengerActivity extends Activity {
                         in.close();
 
                     } catch (SocketException e) {
-                        Log.e("ERROR", "timeout expired");
+                        Log.e(TAG, "timeout expired");
                     }
 
                     out.close();

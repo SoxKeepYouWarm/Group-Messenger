@@ -9,24 +9,6 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.util.Log;
 
-/**
- * GroupMessengerProvider is a key-value table. Once again, please note that we do not implement
- * full support for SQL as a usual ContentProvider does. We re-purpose ContentProvider's interface
- * to use it as a key-value table.
- * 
- * Please read:
- * 
- * http://developer.android.com/guide/topics/providers/content-providers.html
- * http://developer.android.com/reference/android/content/ContentProvider.html
- * 
- * before you start to get yourself familiarized with ContentProvider.
- * 
- * There are two methods you need to implement---insert() and query(). Others are optional and
- * will not be tested.
- * 
- * @author stevko
- *
- */
 public class GroupMessengerProvider extends ContentProvider {
 
     private Database_Helper database_helper;
@@ -69,23 +51,13 @@ public class GroupMessengerProvider extends ContentProvider {
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
-        /*
-         * TODO: You need to implement this method. Note that values will have two columns (a key
-         * column and a value column) and one row that contains the actual (key, value) pair to be
-         * inserted.
-         * 
-         * For actual storage, you can use any option. If you know how to use SQL, then you can use
-         * SQLite. But this is not a requirement. You can use other storage options, such as the
-         * internal storage option that we used in PA1. If you want to use that option, please
-         * take a look at the code for PA1.
-         */
         Log.v("insert", values.toString());
 
         SQLiteDatabase db = database_helper.getWritableDatabase();
 
 
         Uri.Builder uriBuilder = new Uri.Builder();
-        uriBuilder.authority("edu.buffalo.cse.cse486586.groupmessenger1.provider");
+        uriBuilder.authority(AUTHORITY);
         uriBuilder.scheme("content");
         Uri tester_uri = uriBuilder.build();
 
@@ -98,20 +70,6 @@ public class GroupMessengerProvider extends ContentProvider {
             throw new IllegalArgumentException(
                     "Unsupported URI for insertion: " + uri);
         }
-
-        /*else if (URI_MATCHER.match(uri) != KEYS
-                && URI_MATCHER.match(uri) != KEY_ID) {
-            throw new IllegalArgumentException(
-                    "Unsupported URI for insertion: " + uri);
-        }
-        else if (URI_MATCHER.match(uri) == KEY_ID) {
-            long id = db.insert(Key_Value_Contract.TABLE_NAME, null, values);
-            return uri;
-            //return Uri.parse(CONTENT_URI + "/" + id);
-        }
-        else {
-            return uri;
-        }*/
 
     }
 
@@ -131,23 +89,12 @@ public class GroupMessengerProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
                         String sortOrder) {
-        /*
-         * TODO: You need to implement this method. Note that you need to return a Cursor object
-         * with the right format. If the formatting is not correct, then it is not going to work.
-         *
-         * If you use SQLite, whatever is returned from SQLite is a Cursor object. However, you
-         * still need to be careful because the formatting might still be incorrect.
-         *
-         * If you use a file storage option, then it is your job to build a Cursor * object. I
-         * recommend building a MatrixCursor described at:
-         * http://developer.android.com/reference/android/database/MatrixCursor.html
-         */
 
         SQLiteDatabase db = database_helper.getReadableDatabase();
         SQLiteQueryBuilder sqLiteQueryBuilder = new SQLiteQueryBuilder();
 
         Uri.Builder uriBuilder = new Uri.Builder();
-        uriBuilder.authority("edu.buffalo.cse.cse486586.groupmessenger1.provider");
+        uriBuilder.authority(AUTHORITY);
         uriBuilder.scheme("content");
         Uri tester_uri = uriBuilder.build();
 
@@ -169,19 +116,6 @@ public class GroupMessengerProvider extends ContentProvider {
             throw new IllegalArgumentException(
                     "Unsupported URI for insertion: " + uri);
         }
-
-        /*if (URI_MATCHER.match(uri) == KEY_ID || URI_MATCHER.match(uri) == TESTER_ACCESS) {
-
-            builder.setTables(Key_Value_Contract.TABLE_NAME);
-            // limit query to one row at most:
-            builder.appendWhere(Key_Value_Contract.UID + " = "
-                    + uri.getLastPathSegment());
-
-            Cursor cursor = builder.query(db, projection, selection, selectionArgs,
-                    null, null, sortOrder);
-            return cursor;
-
-        }*/
 
     }
 }
