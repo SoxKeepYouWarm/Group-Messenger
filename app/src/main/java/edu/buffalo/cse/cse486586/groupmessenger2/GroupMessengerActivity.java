@@ -21,6 +21,7 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -38,6 +39,7 @@ public class GroupMessengerActivity extends Activity {
 
     // thread safe queue of proposed messages
     Queue<Message> hold_back_queue = new ConcurrentLinkedQueue<Message>();
+    Queue<Message> debug_delivery_queue = new ConcurrentLinkedQueue<Message>();
 
     int current_message_id;
     int proposed_sequence_number;
@@ -128,20 +130,61 @@ public class GroupMessengerActivity extends Activity {
 
     private class ServerTask extends AsyncTask<ServerSocket, String, Void> {
 
-        public void handle_message_received(String message) {
-            boolean is_proposal = message.contains(BREAK_MSG_PROPOSAL);
-            if (is_proposal) {
-                // add new message to the hold-back queue
-                String[] msg_segs = message.split(BREAK_MSG_PROPOSAL);
-                int pid = get_pid_from_port(msg_segs[2]);
-                double proposed_seq = (++proposed_sequence_number) + ((double) pid / 10);
-                hold_back_queue.add(new Message(msg_segs[0], proposed_seq, Integer.parseInt(msg_segs[1]), pid));
 
-            } else {
-                String[] msg_segs = message.split(BREAK_MSG_FINAL);
+        public void handle_message_proposal(String message, Socket socket) {
+            String[] msg_segs = message.split(BREAK_MSG_PROPOSAL);
+            String msg = msg_segs[0];
+            String sender_pid = msg_segs[1];
+            String msg_id = msg_segs[2];
+
+            // add new message to the hold-back queue
+            int pid = Integer.parseInt(sender_pid);
+            double proposed_seq = (++proposed_sequence_number) + ((double) pid / 10);
+
+            Message new_message = new Message(msg,
+                    proposed_seq,
+                    Integer.parseInt(msg_id),
+                    pid);
+
+            hold_back_queue.add(new_message);
+
+            // send back the proposed sequence number
+            try {
+                PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+                writer.println(Double.toString(proposed_seq));
+            } catch (IOException e) {
+                Log.e("ERROR", "error getting printwriter");
+            }
+
+        }
+
+
+        public void handle_message_final(String message) {
+            String[] msg_segs = message.split(BREAK_MSG_FINAL);
+            String msg = msg_segs[0];
+            int pid = Integer.parseInt(msg_segs[1]);
+            int msg_id = Integer.parseInt(msg_segs[2]);
+            String final_seq_num = msg_segs[3];
+            String destination_port = msg_segs[4];
+
+            for (Message holding_msg : hold_back_queue) {
+
+                // find matching message
+                int holding_pid = holding_msg.getProcess_id();
+                int holding_msg_id = holding_msg.message_id();
+
+                // matching message
+                if ((pid == holding_pid) && (msg_id == holding_msg_id)) {
+                    hold_back_queue.remove(holding_msg);
+                    debug_delivery_queue.add(holding_msg);
+                    Log.d("OUTPUT", msg + " received with final_seq_num: " + final_seq_num);
+                    // TODO: Save this message to content provider
+                }
 
             }
+
         }
+
 
         @Override
         protected Void doInBackground(ServerSocket... sockets) {
@@ -156,16 +199,15 @@ public class GroupMessengerActivity extends Activity {
                     String message;
                     if ((message = in.readLine()) != null) {
 
-                        handle_message_received(message);
-
-
-                        publishProgress(message);
-                        if (message.equals("bye")) {
-                            Log.d("BREAK", "client just tried to break connection");
+                        boolean is_proposal = message.contains(BREAK_MSG_PROPOSAL);
+                        if (is_proposal) {
+                            handle_message_proposal(message, clientSocket);
+                        } else {
+                            handle_message_final(message);
                         }
 
+                        publishProgress(message);
                     }
-
 
                 }
 
@@ -193,35 +235,42 @@ public class GroupMessengerActivity extends Activity {
 
                 // get message
                 String message = msgs[0];
-
-                PrintWriter out;
-
                 double final_sequence_number = 0;
                 String msg_id = Integer.toString(++current_message_id);
 
                 for (String destination_port : CLIENT_PORTS) {
-
                     Socket client_socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(destination_port));
                     Log.d(TAG, "sending message to " + destination_port);
 
-                    // using my_port as process_id
                     // send out formatted message
-                    String message_wrapper = message + BREAK_MSG_PROPOSAL + msg_id + BREAK_MSG_PROPOSAL + MY_PORT;
-                    out = new PrintWriter(client_socket.getOutputStream(), true);
+                    String message_wrapper = message + BREAK_MSG_PROPOSAL +
+                            Integer.toString(get_pid_from_port(MY_PORT)) +
+                            msg_id + BREAK_MSG_PROPOSAL;
+
+                    PrintWriter out = new PrintWriter(client_socket.getOutputStream(), true);
                     out.println(message_wrapper);
 
-                    // wait for response
-                    BufferedReader in = new BufferedReader(new InputStreamReader(client_socket.getInputStream()));
-                    String input;
-                    if ((input = in.readLine()) != null) {
-                        // check for new max sequence num
-                        Double proposed_sequence_number = Double.parseDouble(input);
-                        final_sequence_number = Math.max(final_sequence_number, proposed_sequence_number);
+                    // set 500ms timeout for response
+                    client_socket.setSoTimeout(500);
 
+                    try {
+
+                        // wait for response
+                        BufferedReader in = new BufferedReader(new InputStreamReader(client_socket.getInputStream()));
+                        String input;
+                        if ((input = in.readLine()) != null) {
+                            // check for new max sequence num
+                            Double proposed_sequence_number = Double.parseDouble(input);
+                            final_sequence_number = Math.max(final_sequence_number, proposed_sequence_number);
+
+                        }
+                        in.close();
+
+                    } catch (SocketException e) {
+                        Log.e("ERROR", "timeout expired");
                     }
 
-                    in.close();
                     out.close();
                     client_socket.close();
                 }
@@ -232,11 +281,12 @@ public class GroupMessengerActivity extends Activity {
                             Integer.parseInt(destination_port));
 
                     String message_wrapper = message + BREAK_MSG_FINAL +
+                            Integer.toString(get_pid_from_port(MY_PORT)) + BREAK_MSG_FINAL +
                             msg_id + BREAK_MSG_FINAL +
                             final_sequence_number + BREAK_MSG_FINAL +
                             destination_port;
 
-                    out = new PrintWriter(socket.getOutputStream(), true);
+                    PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
                     out.println(message_wrapper);
 
                     out.close();
