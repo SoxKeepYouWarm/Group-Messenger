@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 public class Database_Helper extends SQLiteOpenHelper {
 
     private final static String DATABASE_NAME = "Group_messenger_db";
-    private final static int DATABASE_VERSION = 1;
+    private final static int DATABASE_VERSION = 2;
 
     public Database_Helper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);

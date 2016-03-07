@@ -13,6 +13,7 @@ public class GroupMessengerProvider extends ContentProvider {
 
     private Database_Helper database_helper;
 
+    static final String TAG = GroupMessengerActivity.class.getSimpleName();
     private final static String AUTHORITY = "edu.buffalo.cse.cse486586.groupmessenger2.provider";
     private final static String PROVIDER_URI = "content://" + AUTHORITY;
 
@@ -55,6 +56,7 @@ public class GroupMessengerProvider extends ContentProvider {
 
         SQLiteDatabase db = database_helper.getWritableDatabase();
 
+        Log.d(TAG, "db insert value: " + values.toString());
 
         Uri.Builder uriBuilder = new Uri.Builder();
         uriBuilder.authority(AUTHORITY);
@@ -98,20 +100,26 @@ public class GroupMessengerProvider extends ContentProvider {
         uriBuilder.scheme("content");
         Uri tester_uri = uriBuilder.build();
 
-
+        Log.d(TAG, "db query selections is: " + selection);
 
         if (uri.toString().equals(tester_uri.toString())) {
             sqLiteQueryBuilder.setTables(Key_Value_Contract.TABLE_NAME);
             // limit query to one row at most:
 
-            //sqLiteQueryBuilder.appendWhere("key = key1");
-            sqLiteQueryBuilder.appendWhere(Key_Value_Contract.COLUMN_KEY + " = " + "'" + selection + "'");
-            //builder.appendWhere(Key_Value_Contract.UID + " = "
-            //        + uri.getLastPathSegment());
+            String query = "SELECT * FROM " + Key_Value_Contract.TABLE_NAME +
+                    " ORDER BY " + Key_Value_Contract.COLUMN_KEY + " ASC " +
+                    " limit 1 offset " + selection;
 
-            Cursor cursor = sqLiteQueryBuilder.query(db, Key_Value_Contract.PROJECTION, null, null,
-                    null, null, sortOrder);
-            return cursor;
+            Cursor result = db.rawQuery(query, null);
+            int keyIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_KEY);
+            int valueIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_VALUE);
+            result.moveToFirst();
+            String returnKey = result.getString(keyIndex);
+            String returnValue = result.getString(valueIndex);
+            Log.d(TAG, "key is: " + returnKey + " value is: " + returnValue);
+
+            return result;
+
         } else {
             throw new IllegalArgumentException(
                     "Unsupported URI for insertion: " + uri);

@@ -1,6 +1,7 @@
 package edu.buffalo.cse.cse486586.groupmessenger2;
 
 import android.app.Activity;
+import android.content.ContentValues;
 import android.content.Context;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -36,6 +37,8 @@ public class GroupMessengerActivity extends Activity {
 
     static final String BREAK_MSG_PROPOSAL = "!~!~!~";
     static final String BREAK_MSG_FINAL = "!@!@!@";
+
+    final Uri uri = buildUri("content", "edu.buffalo.cse.cse486586.groupmessenger2.provider");
 
     // thread safe queue of proposed messages
     Queue<Message> hold_back_queue = new ConcurrentLinkedQueue<Message>();
@@ -178,7 +181,13 @@ public class GroupMessengerActivity extends Activity {
                     hold_back_queue.remove(holding_msg);
                     debug_delivery_queue.add(holding_msg);
                     Log.d(TAG, msg + " received with final_seq_num: " + final_seq_num);
-                    // TODO: Save this message to content provider
+
+                    ContentValues new_entry = new ContentValues();
+                    new_entry.put("key", Double.parseDouble(final_seq_num));
+                    new_entry.put("value", msg);
+
+                    Uri result = getContentResolver().insert(uri, new_entry);
+                    Log.d(TAG, result.toString());
                 }
 
             }

@@ -15,7 +15,7 @@ public class Key_Value_Contract {
 
     public final static String CREATE_TABLE = "CREATE TABLE " + TABLE_NAME + "("
             + UID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
-            + COLUMN_KEY + " TEXT, "
+            + COLUMN_KEY + " REAL, "
             + COLUMN_VALUE + " TEXT, "
             + "UNIQUE (" + COLUMN_KEY + ") ON CONFLICT REPLACE);";
 
