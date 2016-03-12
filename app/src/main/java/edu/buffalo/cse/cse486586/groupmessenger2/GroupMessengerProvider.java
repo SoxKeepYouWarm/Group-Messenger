@@ -56,13 +56,12 @@ public class GroupMessengerProvider extends ContentProvider {
 
         SQLiteDatabase db = database_helper.getWritableDatabase();
 
-        Log.d(TAG, "db insert value: " + values.toString());
+        Log.d(TAG, "db insert content_value: " + values.toString());
 
         Uri.Builder uriBuilder = new Uri.Builder();
         uriBuilder.authority(AUTHORITY);
         uriBuilder.scheme("content");
         Uri tester_uri = uriBuilder.build();
-
 
 
         if (uri.toString().equals(tester_uri.toString())) {
@@ -108,15 +107,20 @@ public class GroupMessengerProvider extends ContentProvider {
 
             String query = "SELECT * FROM " + Key_Value_Contract.TABLE_NAME +
                     " ORDER BY " + Key_Value_Contract.COLUMN_KEY + " ASC " +
-                    " limit 1 offset " + selection;
+                    " limit 1 offset " + "'" + selection + "'";
 
             Cursor result = db.rawQuery(query, null);
-            int keyIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_KEY);
-            int valueIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_VALUE);
-            result.moveToFirst();
-            String returnKey = result.getString(keyIndex);
-            String returnValue = result.getString(valueIndex);
-            Log.d(TAG, "key is: " + returnKey + " value is: " + returnValue);
+            if (result.moveToFirst()) {
+                int keyIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_KEY);
+                int valueIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_VALUE);
+                result.moveToFirst();
+                String returnKey = result.getString(keyIndex);
+                String returnValue = result.getString(valueIndex);
+                Log.d(TAG, "key is: " + returnKey + " value is: " + returnValue);
+            } else {
+                Log.d(TAG, "no entry");
+            }
+
 
             return result;
 

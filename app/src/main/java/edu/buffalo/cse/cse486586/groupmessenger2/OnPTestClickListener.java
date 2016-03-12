@@ -64,7 +64,7 @@ public class OnPTestClickListener implements OnClickListener {
         ContentValues[] cv = new ContentValues[TEST_CNT];
         for (int i = 0; i < TEST_CNT; i++) {
             cv[i] = new ContentValues();
-            cv[i].put(KEY_FIELD, "key" + Integer.toString(i));
+            cv[i].put(KEY_FIELD, "" + Integer.toString(i));
             cv[i].put(VALUE_FIELD, "val" + Integer.toString(i));
         }
 
