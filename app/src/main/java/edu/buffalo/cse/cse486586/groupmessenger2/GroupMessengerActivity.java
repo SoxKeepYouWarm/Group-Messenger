@@ -345,11 +345,11 @@ public class GroupMessengerActivity extends Activity {
 
                         Log.d(TAG, "server accepted client message");
 
-                        try {
+                        /*try {
                             Thread.sleep(1000);
                         } catch (InterruptedException e) {
                             Log.e(TAG, "error with wait");
-                        }
+                        }*/
 
                         boolean is_send = message.contains(BREAK_MSG_SEND);
                         boolean is_proposal = message.contains(BREAK_MSG_PROPOSAL);
@@ -415,8 +415,13 @@ public class GroupMessengerActivity extends Activity {
 
             // set bit in delivery status for respective process response
             int delivery_status = new_message.get_delivery_status();
-            delivery_status |= 2^(responder_pid);
+            delivery_status |= 1 << responder_pid;
             new_message.set_seq_num(delivery_status);
+
+            Log.d(TAG, "new delivery status is: " + delivery_status);
+
+            get_msg_from_hold_back(pid, Integer.parseInt(sender_msg_id)).set_delivery_status(delivery_status);
+            Log.d(TAG, "TEST: " + get_msg_from_hold_back(pid, Integer.parseInt(sender_msg_id)).get_delivery_status());
 
             // check if all clients have responded with proposal
             if (new_message.is_deliverable()) {
@@ -441,8 +446,6 @@ public class GroupMessengerActivity extends Activity {
                         } catch (InterruptedException e) {
                             Log.e(TAG, "error with wait");
                         }
-
-                        Log.d(TAG, Boolean.toString(client_socket.isClosed()));
 
                         writer.flush();
 
@@ -493,15 +496,11 @@ public class GroupMessengerActivity extends Activity {
                     PrintWriter out = new PrintWriter(client_socket.getOutputStream(), true);
                     out.println(message_wrapper);
 
-                    Log.d(TAG, Boolean.toString(client_socket.isClosed()));
-
                     try {
                         Thread.sleep(10);
                     } catch (InterruptedException e) {
                         Log.e(TAG, "error with wait");
                     }
-
-                    Log.d(TAG, Boolean.toString(client_socket.isClosed()));
 
                     out.flush();
 
@@ -513,7 +512,6 @@ public class GroupMessengerActivity extends Activity {
                     Log.d(TAG, "just set client input stream");
                     if ((input = in.readLine()) != null) {
 
-                        Log.d(TAG, Boolean.toString(client_socket.isClosed()));
                         Log.d(TAG, "just got proposal back from server");
                         handle_message_proposal(input);
 
@@ -543,46 +541,3 @@ public class GroupMessengerActivity extends Activity {
     }
 
 }
-
-
-// set 500ms timeout for response
-//client_socket.setSoTimeout(500);
-
-                /*try {
-
-                    // wait for response
-                    BufferedReader in = new BufferedReader(new InputStreamReader(client_socket.getInputStream()));
-                    String input;
-                    if ((input = in.readLine()) != null) {
-                        // check for new max sequence num
-                        Log.d(TAG, "just got message back from server");
-                        Double proposed_sequence_number = Double.parseDouble(input);
-                        final_sequence_number = Math.max(final_sequence_number, proposed_sequence_number);
-
-                    }
-                    in.close();
-                    client_socket.close();
-
-                } catch (SocketException e) {
-                    Log.e(TAG, "timeout expired: " + e.getMessage());
-                } catch (IOException e) {
-                    Log.e(TAG, "io exception waiting for response on client");
-                }*/
-
-
-/*for (String destination_port : CLIENT_PORTS) {
-                    Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                            Integer.parseInt(destination_port));
-
-                    String message_wrapper = message + BREAK_MSG_FINAL +
-                            Integer.toString(get_pid_from_port(MY_PORT)) + BREAK_MSG_FINAL +
-                            msg_id + BREAK_MSG_FINAL +
-                            final_sequence_number + BREAK_MSG_FINAL +
-                            destination_port;
-
-                    PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-                    out.println(message_wrapper);
-
-                    out.close();
-                    socket.close();
-                }*/
