@@ -119,6 +119,7 @@ public class GroupMessengerProvider extends ContentProvider {
                 Log.d(TAG, "key is: " + returnKey + " value is: " + returnValue);
             } else {
                 Log.d(TAG, "no entry");
+                return null;
             }
 
 

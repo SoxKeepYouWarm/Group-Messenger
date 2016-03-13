@@ -21,11 +21,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.InterfaceAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
@@ -43,7 +40,6 @@ public class GroupMessengerActivity extends Activity {
     static final String BREAK_MSG_SEND = "!#!#!#";
     static final String BREAK_MSG_PROPOSAL = "!~!~!~";
     static final String BREAK_MSG_FINAL = "!@!@!@";
-    static final int TIMEOUT = 2000;
 
     final Uri uri = buildUri("content", "edu.buffalo.cse.cse486586.groupmessenger2.provider");
 
@@ -108,6 +104,10 @@ public class GroupMessengerActivity extends Activity {
                 for (int i = 0; i < 25; i ++) {
 
                     Cursor result = getContentResolver().query(uri, null, Integer.toString(i), null, null);
+                    if (result == null) {
+                        Log.e(TAG, "empty curor returned");
+                        return;
+                    }
 
                     if (result.moveToFirst()) {
 
@@ -182,6 +182,15 @@ public class GroupMessengerActivity extends Activity {
 
         }
 
+        // message is missing, dump queue contents for debug
+        Log.e(TAG, "HOLD_BACK_QUEUE DUMP START");
+        for (Message msg: hold_back_queue) {
+            int msg_pid = msg.get_process_id();
+            int id = msg.get_message_id();
+            Log.e(TAG, "MISSING: pid: " + msg_pid + " msg_id " + id);
+        }
+        Log.e(TAG, "HOLD_BACK_QUEUE DUMP END");
+
         return null;
 
     }
@@ -198,7 +207,9 @@ public class GroupMessengerActivity extends Activity {
 
             int pid = get_pid_from_port(MY_PORT);
 
-            Log.d(TAG, Integer.toString(pid) + " HANDLE_SEND: " + message + " from " + sender_pid);
+            Log.d(TAG, Integer.toString(pid) + " HANDLE_SEND: " + message +
+                    " sender_pid: " + sender_pid +
+                    " sender_msg_id: " + sender_msg_id);
 
             boolean i_am_sender = sender_pid.equals(Integer.toString(get_pid_from_port(MY_PORT)));
 
@@ -214,7 +225,7 @@ public class GroupMessengerActivity extends Activity {
                 Message new_message = new Message(msg,
                         0.0,
                         Integer.parseInt(sender_msg_id),
-                        pid);
+                        Integer.parseInt(sender_pid));
 
                 hold_back_queue.add(new_message);
             }
@@ -225,7 +236,10 @@ public class GroupMessengerActivity extends Activity {
 
             // send back the proposed sequence number
             try {
-                Log.d(TAG, "SENDER_HANDLER: sending back proposal: " + Integer.toString(proposed_msg_id));
+                Log.d(TAG, "SENDER_HANDLER: sending back proposal: " + Integer.toString(proposed_msg_id) +
+                        " for sender_pid: " + sender_pid +
+                        " sender_msg_id: " + sender_msg_id);
+
                 PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
                 writer.println(response_msg);
             } catch (IOException e) {
@@ -234,84 +248,24 @@ public class GroupMessengerActivity extends Activity {
 
         }
 
-        // runs on sender device
-        public void handle_message_proposal(String message, Socket socket) {
-
-            try {
-                socket.close();
-            } catch (IOException e) {
-                Log.e(TAG, e.getMessage());
-            }
-
-            String[] msg_segs = message.split(BREAK_MSG_PROPOSAL);
-            String sender_msg_id = msg_segs[0];
-            String proposed_msg_id = msg_segs[1];
-            int responder_pid = Integer.parseInt(msg_segs[2]);
-
-            int pid = get_pid_from_port(MY_PORT);
-
-            Log.d(TAG, Integer.toString(pid) + " HANDLE_PROPOSAL FROM " +
-                    Integer.toString(responder_pid) + " : " +
-                    message + " with proposal sequence " + proposed_msg_id);
-
-            Message new_message = get_msg_from_hold_back(pid, Integer.parseInt(sender_msg_id));
-            if (new_message == null) {
-                Log.e(TAG, "sent message could not be found in hold-back_queue");
-                return;
-            }
-
-            // check if proposed id is higher than current seq_num
-            if (Integer.parseInt(proposed_msg_id) > new_message.get_seq_num()) {
-                new_message.set_seq_num(Integer.parseInt(proposed_msg_id));
-            }
-
-            // set bit in delivery status for respective process response
-            int delivery_status = new_message.get_delivery_status();
-            delivery_status |= 2^(responder_pid);
-            new_message.set_seq_num(delivery_status);
-
-            // check if all clients have responded with proposal
-            if (new_message.is_deliverable()) {
-
-                // send pid and msg_id as identifiers, and report final sequence id
-                String announce_final_message =
-                        Integer.toString(new_message.get_message_id()) + BREAK_MSG_FINAL +
-                                Integer.toString(new_message.get_process_id()) + BREAK_MSG_FINAL +
-                                Double.toString(new_message.get_seq_num()) + BREAK_MSG_FINAL;
-
-                // send back the proposed sequence number
-                try {
-                    for (String destination_port : CLIENT_PORTS) {
-                        Socket client_socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                                Integer.parseInt(destination_port));
-                        PrintWriter writer = new PrintWriter(client_socket.getOutputStream(), true);
-                        writer.println(announce_final_message);
-                        writer.close();
-                    }
-                } catch (UnknownHostException e) {
-                    Log.e(TAG, "error connecting sockets for final message");
-                } catch (IOException e) {
-                    Log.e(TAG, "error connecting sockets for final message");
-                }
-
-            }
-
-        }
-
 
         public void handle_message_final(String message) {
             String[] msg_segs = message.split(BREAK_MSG_FINAL);
-            int pid = Integer.parseInt(msg_segs[0]);
-            int msg_id = Integer.parseInt(msg_segs[1]);
+            int msg_id = Integer.parseInt(msg_segs[0]);
+            int pid = Integer.parseInt(msg_segs[1]);
             String final_seq_num = msg_segs[2];
 
             String my_pid = Integer.toString(get_pid_from_port(MY_PORT));
-            Log.d(TAG, my_pid + " FINAL_HANDLER: " + message);
+
+            Log.d(TAG, my_pid + " FINAL_HANDLER: " + message +
+                    " msg_id: " + msg_id +
+                    " ipd: " + pid +
+                    " final_seq_num: " + final_seq_num);
 
             // find this message in the hold back queue
             Message final_message = get_msg_from_hold_back(pid, msg_id);
             if (final_message == null) {
-                Log.e(TAG, "message was missing during final handler");
+                Log.e(TAG, "FINAL_HANDLER: missing pid: " + pid + " msg_id " + msg_id);
                 return;
             }
 
@@ -323,6 +277,10 @@ public class GroupMessengerActivity extends Activity {
             new_entry.put("value", final_message.getMessage());
 
             Uri result = getContentResolver().insert(uri, new_entry);
+            if (result == null) {
+                Log.e(TAG, "error inserting value into content provider");
+                return;
+            }
             Log.d(TAG, result.toString());
 
         }
@@ -338,12 +296,12 @@ public class GroupMessengerActivity extends Activity {
                     Socket clientSocket = serverSocket.accept();
                     BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
 
-                    Log.d(TAG, "server accepted client");
+                    //Log.d(TAG, "server accepted client");
 
                     String message;
                     while ((message = in.readLine()) != null) {
 
-                        Log.d(TAG, "server accepted client message");
+                        //Log.d(TAG, "server accepted client message");
 
                         /*try {
                             Thread.sleep(1000);
@@ -352,16 +310,12 @@ public class GroupMessengerActivity extends Activity {
                         }*/
 
                         boolean is_send = message.contains(BREAK_MSG_SEND);
-                        boolean is_proposal = message.contains(BREAK_MSG_PROPOSAL);
+                        //boolean is_proposal = message.contains(BREAK_MSG_PROPOSAL);
                         boolean is_final = message.contains(BREAK_MSG_FINAL);
 
                         if (is_send) {
                             handle_send(message, clientSocket);
-                        }
-                        else if (is_proposal) {
-                            handle_message_proposal(message, clientSocket);
-                        }
-                        else if (is_final) {
+                        } else if (is_final) {
                             handle_message_final(message);
                         }
 
@@ -387,6 +341,47 @@ public class GroupMessengerActivity extends Activity {
 
 
     private class ClientTask extends AsyncTask<String, Void, Void> {
+
+
+        public void deliver_final_message(Message final_msg) {
+
+            Log.d(TAG, "delivering final message " + final_msg.get_message_id() +
+                    " with sequence number " + final_msg.get_seq_num());
+
+            // send pid and msg_id as identifiers, and report final sequence id
+            String announce_final_message =
+                    Integer.toString(final_msg.get_message_id()) + BREAK_MSG_FINAL +
+                            Integer.toString(final_msg.get_process_id()) + BREAK_MSG_FINAL +
+                            Double.toString(final_msg.get_seq_num()) + BREAK_MSG_FINAL;
+
+            // send out the final message
+            try {
+                for (String destination_port : CLIENT_PORTS) {
+                    Log.d(TAG, "sending FINAL_MSG " + final_msg.get_message_id() +
+                            " to " + destination_port);
+                    Socket client_socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(destination_port));
+                    PrintWriter writer = new PrintWriter(client_socket.getOutputStream(), true);
+                    writer.println(announce_final_message);
+
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {
+                        Log.e(TAG, "error with wait");
+                    }
+
+                    writer.flush();
+
+                    writer.close();
+                    client_socket.close();
+                }
+            } catch (UnknownHostException e) {
+                Log.e(TAG, "error connecting sockets for final message");
+            } catch (IOException e) {
+                Log.e(TAG, "error connecting sockets for final message");
+            }
+
+        }
 
 
         public void handle_message_proposal(String message) {
@@ -416,48 +411,13 @@ public class GroupMessengerActivity extends Activity {
             // set bit in delivery status for respective process response
             int delivery_status = new_message.get_delivery_status();
             delivery_status |= 1 << responder_pid;
-            new_message.set_seq_num(delivery_status);
+            new_message.set_delivery_status(delivery_status);
 
             Log.d(TAG, "new delivery status is: " + delivery_status);
 
-            get_msg_from_hold_back(pid, Integer.parseInt(sender_msg_id)).set_delivery_status(delivery_status);
-            Log.d(TAG, "TEST: " + get_msg_from_hold_back(pid, Integer.parseInt(sender_msg_id)).get_delivery_status());
-
             // check if all clients have responded with proposal
             if (new_message.is_deliverable()) {
-
-                // send pid and msg_id as identifiers, and report final sequence id
-                String announce_final_message =
-                        Integer.toString(new_message.get_message_id()) + BREAK_MSG_FINAL +
-                                Integer.toString(new_message.get_process_id()) + BREAK_MSG_FINAL +
-                                Double.toString(new_message.get_seq_num()) + BREAK_MSG_FINAL;
-
-                // send back the proposed sequence number
-                try {
-                    for (String destination_port : CLIENT_PORTS) {
-                        Log.d(TAG, "sending FINAL_MSG to " + destination_port);
-                        Socket client_socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                                Integer.parseInt(destination_port));
-                        PrintWriter writer = new PrintWriter(client_socket.getOutputStream(), true);
-                        writer.println(announce_final_message);
-
-                        try {
-                            Thread.sleep(10);
-                        } catch (InterruptedException e) {
-                            Log.e(TAG, "error with wait");
-                        }
-
-                        writer.flush();
-
-                        writer.close();
-                        client_socket.close();
-                    }
-                } catch (UnknownHostException e) {
-                    Log.e(TAG, "error connecting sockets for final message");
-                } catch (IOException e) {
-                    Log.e(TAG, "error connecting sockets for final message");
-                }
-
+                deliver_final_message(new_message);
             }
 
         }
@@ -505,11 +465,10 @@ public class GroupMessengerActivity extends Activity {
                     out.flush();
 
                     // set 500ms timeout for response
-                    client_socket.setSoTimeout(500);
+                    client_socket.setSoTimeout(2000);
 
                     BufferedReader in = new BufferedReader(new InputStreamReader(client_socket.getInputStream()));
                     String input;
-                    Log.d(TAG, "just set client input stream");
                     if ((input = in.readLine()) != null) {
 
                         Log.d(TAG, "just got proposal back from server");
@@ -526,7 +485,9 @@ public class GroupMessengerActivity extends Activity {
                 } catch (SocketException e) {
                     Log.e(TAG, "Socket exception (timeout): " + e.getMessage());
                 } catch (SocketTimeoutException e) {
-                    Log.e(TAG, "timeout exception: " + e.getMessage());
+                    Log.e(TAG, "timeout exception: " +
+                            " msg_id: " + msg_id +
+                            " destination: " + get_pid_from_port(destination_port));
                     // todo Timeouts need to be handled
                 } catch (IOException e) {
                     Log.e(TAG, "io exception connecting client socket: " + e.getMessage());
