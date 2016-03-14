@@ -115,10 +115,10 @@ public class GroupMessengerActivity extends Activity {
                         int valueIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_VALUE);
                         String returnKey = result.getString(keyIndex);
                         String returnValue = result.getString(valueIndex);
-                        Log.d(TAG, "key is: " + returnKey + " value is: " + returnValue);
+                        //Log.d(TAG, i + ": key is: " + returnKey + " value is: " + returnValue);
                         result.close();
 
-                        tv.append("key is: " + returnKey + " value is: " + returnValue + '\n');
+                        tv.append(i + ": key is: " + returnKey + " value is: " + returnValue + '\n');
                     } else {
                         tv.append("no entry for " + i + '\n');
                     }
@@ -257,10 +257,7 @@ public class GroupMessengerActivity extends Activity {
 
             String my_pid = Integer.toString(get_pid_from_port(MY_PORT));
 
-            Log.d(TAG, my_pid + " FINAL_HANDLER: " + message +
-                    " msg_id: " + msg_id +
-                    " ipd: " + pid +
-                    " final_seq_num: " + final_seq_num);
+
 
             // find this message in the hold back queue
             Message final_message = get_msg_from_hold_back(pid, msg_id);
@@ -269,11 +266,16 @@ public class GroupMessengerActivity extends Activity {
                 return;
             }
 
+            Log.d(TAG, my_pid + " FINAL_HANDLER: " + final_message.getMessage() +
+                    " msg_id: " + msg_id +
+                    " ipd: " + pid +
+                    " final_seq_num: " + final_seq_num);
+
             hold_back_queue.remove(final_message);
             debug_delivery_queue.add(final_message);
 
             ContentValues new_entry = new ContentValues();
-            new_entry.put("key", Double.parseDouble(final_seq_num));
+            new_entry.put("_id", Double.parseDouble(final_seq_num));
             new_entry.put("value", final_message.getMessage());
 
             Uri result = getContentResolver().insert(uri, new_entry);
@@ -391,13 +393,13 @@ public class GroupMessengerActivity extends Activity {
             String proposed_msg_id = msg_segs[1];
             int responder_pid = Integer.parseInt(msg_segs[2]);
 
-            int pid = get_pid_from_port(MY_PORT);
+            int my_pid = get_pid_from_port(MY_PORT);
 
-            Log.d(TAG, Integer.toString(pid) + " HANDLE_PROPOSAL FROM " +
+            Log.d(TAG, Integer.toString(my_pid) + " HANDLE_PROPOSAL FROM " +
                     Integer.toString(responder_pid) + " : " +
                     message + " with proposal sequence " + proposed_msg_id);
 
-            Message new_message = get_msg_from_hold_back(pid, Integer.parseInt(sender_msg_id));
+            Message new_message = get_msg_from_hold_back(my_pid, Integer.parseInt(sender_msg_id));
             if (new_message == null) {
                 Log.e(TAG, "sent message could not be found in hold-back_queue");
                 return;
@@ -417,6 +419,12 @@ public class GroupMessengerActivity extends Activity {
 
             // check if all clients have responded with proposal
             if (new_message.is_deliverable()) {
+
+                // prioritize sequence number by process id
+                double seq_num = new_message.get_seq_num();
+                seq_num += ((double) my_pid / 10);
+                new_message.set_seq_num(seq_num);
+
                 deliver_final_message(new_message);
             }
 

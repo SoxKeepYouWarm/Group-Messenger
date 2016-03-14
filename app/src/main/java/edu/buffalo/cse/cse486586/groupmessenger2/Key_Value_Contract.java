@@ -14,8 +14,8 @@ public class Key_Value_Contract {
     public final static String[] PROJECTION = {UID, COLUMN_KEY, COLUMN_VALUE};
 
     public final static String CREATE_TABLE = "CREATE TABLE " + TABLE_NAME + "("
-            + UID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
-            + COLUMN_KEY + " REAL, "
+            + UID + " REAL PRIMARY KEY NOT NULL, "
+            + COLUMN_KEY + " TEXT, "
             + COLUMN_VALUE + " TEXT, "
             + "UNIQUE (" + COLUMN_KEY + ") ON CONFLICT REPLACE);";
 

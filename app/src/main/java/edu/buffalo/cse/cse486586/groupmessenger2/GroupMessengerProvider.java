@@ -14,13 +14,16 @@ public class GroupMessengerProvider extends ContentProvider {
     private Database_Helper database_helper;
 
     static final String TAG = GroupMessengerActivity.class.getSimpleName();
-    private final static String AUTHORITY = "edu.buffalo.cse.cse486586.groupmessenger2.provider";
-    private final static String PROVIDER_URI = "content://" + AUTHORITY;
+    public final static String AUTHORITY = "edu.buffalo.cse.cse486586.groupmessenger2.provider";
+    public final static String PROVIDER_URI = "content://" + AUTHORITY;
 
     private static final int KEYS = 1;
     private static final int KEY_ID = 2;
 
     private static final int TESTER_ACCESS = 3;
+
+    private static int SIZE = 0;
+    private static boolean IS_SORTED = false;
 
     private static final UriMatcher URI_MATCHER;
 
@@ -66,6 +69,8 @@ public class GroupMessengerProvider extends ContentProvider {
 
         if (uri.toString().equals(tester_uri.toString())) {
             long id = db.insert(Key_Value_Contract.TABLE_NAME, null, values);
+            SIZE++;
+            IS_SORTED = false;
             return uri;
         } else {
             throw new IllegalArgumentException(
@@ -87,6 +92,31 @@ public class GroupMessengerProvider extends ContentProvider {
         return 0;
     }
 
+
+    private void maintain_order(SQLiteDatabase db) {
+
+        String query = "SELECT * FROM " + Key_Value_Contract.TABLE_NAME +
+                " ORDER BY " + Key_Value_Contract.UID + " ASC ";
+
+        Cursor result = db.rawQuery(query, null);
+
+        result.moveToFirst();
+        for (int i = 0; i < result.getCount(); i++) {
+
+            int id_index = result.getColumnIndex(Key_Value_Contract.UID);
+            double sequence_id = result.getDouble(id_index);
+
+            db.execSQL("UPDATE " + Key_Value_Contract.TABLE_NAME +
+                " SET " + Key_Value_Contract.COLUMN_KEY + "=" + Integer.toString(i) +
+                " WHERE " + Key_Value_Contract.UID + "=" + Double.toString(sequence_id));
+
+        }
+
+        result.close();
+
+    }
+
+
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
                         String sortOrder) {
@@ -98,6 +128,11 @@ public class GroupMessengerProvider extends ContentProvider {
         uriBuilder.authority(AUTHORITY);
         uriBuilder.scheme("content");
         Uri tester_uri = uriBuilder.build();
+
+
+        if (! IS_SORTED) {
+            maintain_order(db);
+        }
 
         Log.d(TAG, "db query selections is: " + selection);
 
@@ -118,7 +153,7 @@ public class GroupMessengerProvider extends ContentProvider {
                 String returnValue = result.getString(valueIndex);
                 Log.d(TAG, "key is: " + returnKey + " value is: " + returnValue);
             } else {
-                Log.d(TAG, "no entry");
+                Log.e(TAG, "no entry for query: " + query);
                 return null;
             }
 
