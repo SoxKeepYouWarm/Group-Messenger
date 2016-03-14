@@ -2,6 +2,7 @@ package edu.buffalo.cse.cse486586.groupmessenger2;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -93,30 +94,36 @@ public class GroupMessengerProvider extends ContentProvider {
     }
 
 
-    private void maintain_order(SQLiteDatabase db) {
+    public void maintain_order(SQLiteDatabase db) {
 
         String query = "SELECT * FROM " + Key_Value_Contract.TABLE_NAME +
                 " ORDER BY " + Key_Value_Contract.UID + " ASC ";
 
         Cursor result = db.rawQuery(query, null);
 
-        result.moveToFirst();
         for (int i = 0; i < result.getCount(); i++) {
 
+            result.moveToPosition(i);
             int id_index = result.getColumnIndex(Key_Value_Contract.UID);
             double sequence_id = result.getDouble(id_index);
 
-            db.execSQL("UPDATE " + Key_Value_Contract.TABLE_NAME +
-                " SET " + Key_Value_Contract.COLUMN_KEY + "=" + Integer.toString(i) +
-                " WHERE " + Key_Value_Contract.UID + "=" + Double.toString(sequence_id));
+            String update_query = "UPDATE " + Key_Value_Contract.TABLE_NAME +
+                    " SET " + Key_Value_Contract.COLUMN_KEY + "=" + "'" + Integer.toString(i) + "'" +
+                    " WHERE " + Key_Value_Contract.UID + "=" + Double.toString(sequence_id);
+
+            db.execSQL(update_query);
+
+            Log.d(TAG, "just executed: " + update_query);
 
         }
 
+        IS_SORTED = true;
         result.close();
 
     }
 
 
+    boolean DEBUG_SIZE = true;
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
                         String sortOrder) {
@@ -140,23 +147,32 @@ public class GroupMessengerProvider extends ContentProvider {
             sqLiteQueryBuilder.setTables(Key_Value_Contract.TABLE_NAME);
             // limit query to one row at most:
 
-            String query = "SELECT * FROM " + Key_Value_Contract.TABLE_NAME +
+            /*String query = "SELECT * FROM " + Key_Value_Contract.TABLE_NAME +
                     " ORDER BY " + Key_Value_Contract.COLUMN_KEY + " ASC " +
-                    " limit 1 offset " + "'" + selection + "'";
+                    " limit 1 offset " + "'" + selection + "'";*/
+
+            String query = "SELECT * FROM " + Key_Value_Contract.TABLE_NAME +
+                    " ORDER BY " + Key_Value_Contract.UID + " ASC ";
 
             Cursor result = db.rawQuery(query, null);
-            if (result.moveToFirst()) {
-                int keyIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_KEY);
-                int valueIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_VALUE);
-                result.moveToFirst();
-                String returnKey = result.getString(keyIndex);
-                String returnValue = result.getString(valueIndex);
-                Log.d(TAG, "key is: " + returnKey + " value is: " + returnValue);
-            } else {
+            result.moveToPosition(Integer.parseInt(selection));
+
+            if (DEBUG_SIZE) {
+                Log.d(TAG, "size is: " + result.getCount());
+                DEBUG_SIZE = false;
+            }
+
+            if (result.getCount() == 0) {
                 Log.e(TAG, "no entry for query: " + query);
                 return null;
             }
 
+            int keyIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_KEY);
+            int valueIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_VALUE);
+
+            String returnKey = result.getString(keyIndex);
+            String returnValue = result.getString(valueIndex);
+            Log.d(TAG, "key is: " + returnKey + " value is: " + returnValue);
 
             return result;
 

@@ -76,6 +76,32 @@ public class GroupMessengerActivity extends Activity {
     }
 
 
+    private void dump_handler() {
+        final TextView tv = (TextView) findViewById(R.id.textView1);
+        Cursor result = getContentResolver().query(uri, null, Integer.toString(0), null, null);
+        if (result == null) {
+            Log.e(TAG, "empty curor returned");
+            return;
+        }
+
+        while (result.moveToNext()) {
+            int keyIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_KEY);
+            int valueIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_VALUE);
+            String returnKey = result.getString(keyIndex);
+            String returnValue = result.getString(valueIndex);
+
+            tv.append(result.getPosition() + ": key is: " + returnKey + " value is: " + returnValue + '\n');
+        }
+
+        result.close();
+    }
+
+
+    private void order_handler() {
+
+    }
+
+
     private void initialize_ui_elements() {
 
         final TextView tv = (TextView) findViewById(R.id.textView1);
@@ -100,32 +126,15 @@ public class GroupMessengerActivity extends Activity {
         dump_db.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                dump_handler();
+            }
+        });
 
-                for (int i = 0; i < 25; i ++) {
-
-                    Cursor result = getContentResolver().query(uri, null, Integer.toString(i), null, null);
-                    if (result == null) {
-                        Log.e(TAG, "empty curor returned");
-                        return;
-                    }
-
-                    if (result.moveToFirst()) {
-
-                        int keyIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_KEY);
-                        int valueIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_VALUE);
-                        String returnKey = result.getString(keyIndex);
-                        String returnValue = result.getString(valueIndex);
-                        //Log.d(TAG, i + ": key is: " + returnKey + " value is: " + returnValue);
-                        result.close();
-
-                        tv.append(i + ": key is: " + returnKey + " value is: " + returnValue + '\n');
-                    } else {
-                        tv.append("no entry for " + i + '\n');
-                    }
-
-
-                }
-
+        Button order = (Button) findViewById(R.id.order);
+        order.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                order_handler();
             }
         });
     }
@@ -275,8 +284,8 @@ public class GroupMessengerActivity extends Activity {
             debug_delivery_queue.add(final_message);
 
             ContentValues new_entry = new ContentValues();
-            new_entry.put("_id", Double.parseDouble(final_seq_num));
-            new_entry.put("value", final_message.getMessage());
+            new_entry.put(Key_Value_Contract.UID, Double.parseDouble(final_seq_num));
+            new_entry.put(Key_Value_Contract.COLUMN_VALUE, final_message.getMessage());
 
             Uri result = getContentResolver().insert(uri, new_entry);
             if (result == null) {
@@ -473,7 +482,7 @@ public class GroupMessengerActivity extends Activity {
                     out.flush();
 
                     // set 500ms timeout for response
-                    client_socket.setSoTimeout(2000);
+                    client_socket.setSoTimeout(3000);
 
                     BufferedReader in = new BufferedReader(new InputStreamReader(client_socket.getInputStream()));
                     String input;

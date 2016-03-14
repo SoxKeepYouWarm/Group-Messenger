@@ -32,6 +32,13 @@
         android:text="dump db"/>
 
     <Button
+        android:id="@+id/order"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_toRightOf="@id/dump_db"
+        android:text="order"/>
+
+    <Button
         android:id="@+id/button4"
         style="?android:attr/buttonStyleSmall"
         android:layout_width="wrap_content"

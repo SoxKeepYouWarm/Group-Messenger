@@ -45,9 +45,18 @@ public class provider_test extends ProviderTestCase2<GroupMessengerProvider> {
         Log.d(TAG, "tearDown:");
     }
 
+    public void test_table_column_names() {
+
+    }
+
     public void testActiveUserInsert__inserts_a_valid_record() {
         Uri uri = mMockResolver.insert(provider_uri, get_test_user());
-        assertEquals(1L, ContentUris.parseId(uri));
+
+        assertNotNull(uri);
+        long id = ContentUris.parseId(uri);
+        assertTrue(id > 0);
+
+        //assertEquals(1L, ContentUris.parseId(uri));
     }
 
     public static ContentValues get_test_user() {
@@ -57,6 +66,10 @@ public class provider_test extends ProviderTestCase2<GroupMessengerProvider> {
         sample.put(Key_Value_Contract.COLUMN_VALUE, "Hello World!");
 
         return sample;
+    }
+
+    public void test_math() {
+        assertEquals(2, 1 + 1);
     }
 
     private static Uri buildUri(String scheme, String authority) {
