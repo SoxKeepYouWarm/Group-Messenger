@@ -8,6 +8,8 @@ public class Message implements Comparable<Message> {
     private int process_id;
     private int DELIVERY_STATUS;
 
+    private static int DELIVERY_REQUIREMENT = 31;
+
     public Message(String msg, double seq, int msg_id, int p_id) {
         this.message = msg;
         this.seq_num = seq;
@@ -45,8 +47,16 @@ public class Message implements Comparable<Message> {
         this.DELIVERY_STATUS = num;
     }
 
+    public static void set_delivery_requirement(int num) {
+        DELIVERY_REQUIREMENT = num;
+    }
+
+    public static int get_delivery_requirement() {
+        return DELIVERY_REQUIREMENT;
+    }
+
     public boolean is_deliverable() {
-        return this.DELIVERY_STATUS == 31;
+        return this.DELIVERY_STATUS == DELIVERY_REQUIREMENT;
     }
 
     public int compareTo(Message other) {

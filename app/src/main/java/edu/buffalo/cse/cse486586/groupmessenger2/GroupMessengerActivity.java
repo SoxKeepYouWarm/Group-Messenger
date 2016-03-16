@@ -29,15 +29,18 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Dictionary;
+import java.util.Hashtable;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class GroupMessengerActivity extends Activity {
 
     private static int SERVER_PORT = 10000;
-    //private static List<String> CLIENT_PORTS = Collections.synchronizedList(Arrays.asList("11108", "11112", "11116", "11120", "11124"));
     private static List<String> CLIENT_PORTS = new ArrayList<String>(Arrays.asList("11108", "11112", "11116", "11120", "11124"));
+    private final Map<String, Integer> CLIENT_DICTIONARY = new Hashtable<String, Integer>();
 
     private static String MY_PORT;
 
@@ -72,12 +75,7 @@ public class GroupMessengerActivity extends Activity {
 
 
     private int get_pid_from_port(String port) {
-        for (int i = 0; i < CLIENT_PORTS.size(); i++) {
-            if (CLIENT_PORTS.get(i).equals(port)) { return i; }
-        }
-
-        // shouldn't return here
-        return -1;
+        return CLIENT_DICTIONARY.get(port);
     }
 
 
@@ -139,6 +137,7 @@ public class GroupMessengerActivity extends Activity {
             public void onClick(View v) {
                 String msg = input.getText().toString();
                 input.setText("");
+                Log.d(TAG, "message is: " + msg);
                 new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg);
             }
         });
@@ -180,6 +179,12 @@ public class GroupMessengerActivity extends Activity {
         setContentView(R.layout.activity_group_messenger);
 
         current_message_id = 0;
+
+        CLIENT_DICTIONARY.put("11108", 0);
+        CLIENT_DICTIONARY.put("11112", 1);
+        CLIENT_DICTIONARY.put("11116", 2);
+        CLIENT_DICTIONARY.put("11120", 3);
+        CLIENT_DICTIONARY.put("11124", 4);
 
         set_my_port();
 
@@ -344,14 +349,6 @@ public class GroupMessengerActivity extends Activity {
                     String message;
                     while ((message = in.readLine()) != null) {
 
-                        //Log.d(TAG, "server accepted client message");
-
-                        /*try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e) {
-                            Log.e(TAG, "error with wait");
-                        }*/
-
                         boolean is_send = message.contains(BREAK_MSG_SEND);
                         boolean is_final = message.contains(BREAK_MSG_FINAL);
 
@@ -466,11 +463,12 @@ public class GroupMessengerActivity extends Activity {
             delivery_status |= 1 << responder_pid;
             new_message.set_delivery_status(delivery_status);
 
-            Log.d(TAG, "new delivery status is: " + delivery_status + " responder pid was: " + responder_pid);
+            Log.d(TAG, new_message.getMessage() + " delivery status is: " + delivery_status + " responder pid was: " + responder_pid);
 
             // check if all clients have responded with proposal
             if (new_message.is_deliverable()) {
 
+                Log.d(TAG, new_message.getMessage() + " is deliverable");
                 // prioritize sequence number by process id
                 double seq_num = new_message.get_seq_num();
                 seq_num += ((double) my_pid / 10);
@@ -534,11 +532,14 @@ public class GroupMessengerActivity extends Activity {
                         handle_message_proposal(input);
 
                     } else {
-                        Log.e(TAG, "empty proposal from server");
+                        Log.e(TAG, "empty proposal from server, consider this a failure");
+
+                        handle_failure(destination_port, new_message);
 
                         out.close();
                         in.close();
                         client_socket.close();
+
                     }
 
                 } catch (SocketException e) {
@@ -547,8 +548,7 @@ public class GroupMessengerActivity extends Activity {
                     Log.e(TAG, "pid:" + Integer.toString(get_pid_from_port(MY_PORT)) +
                             " SEND_MSG_TIMEOUT: " + message +
                             " destination: " + get_pid_from_port(destination_port));
-                    // remove port from loop
-                    //remove_client(destination_port);
+                    handle_failure(destination_port, new_message);
                 } catch (IOException e) {
                     Log.e(TAG, "io exception connecting client socket: " + e.getMessage());
                     return null;
@@ -559,6 +559,38 @@ public class GroupMessengerActivity extends Activity {
             return null;
 
         }
+
+
+        public void handle_failure(String failing_port, Message failed_msg) {
+
+            int failing_pid = get_pid_from_port(failing_port);
+            // lower current delivery requirement by value of failing port
+            int delivery_requirement = Message.get_delivery_requirement();
+            int fail_val = 1 << failing_pid;
+
+            Message.set_delivery_requirement(delivery_requirement - fail_val);
+
+            // remove port from loop of clients
+            remove_client(failing_port);
+
+            Log.d(TAG, "FAILURE: " + "port: " + failing_port +
+                    " pid: " + failing_pid +
+                    " new delivery requirement is: " + (delivery_requirement - fail_val));
+
+            // check if failed message should be delivered now
+            if (failed_msg.is_deliverable()) {
+
+                Log.d(TAG, failed_msg.getMessage() + " is deliverable");
+                // prioritize sequence number by process id
+                double seq_num = failed_msg.get_seq_num();
+                seq_num += ((double) get_pid_from_port(MY_PORT) / 10);
+                failed_msg.set_seq_num(seq_num);
+
+                deliver_final_message(failed_msg);
+            }
+
+        }
+
     }
 
 }
