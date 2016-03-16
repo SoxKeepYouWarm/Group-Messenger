@@ -245,8 +245,6 @@ public class GroupMessengerActivity extends Activity {
 
             // add new message to the hold-back queue
 
-            //double proposed_seq = (++current_message_id) + ((double) Integer.parseInt(sender_pid) / 10);
-
             int proposed_msg_id;
             if (i_am_sender) {
                 proposed_msg_id = current_message_id;
@@ -272,7 +270,7 @@ public class GroupMessengerActivity extends Activity {
 
                 PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
                 writer.println(response_msg);
-                //writer.close();
+                writer.flush();
             } catch (IOException e) {
                 Log.e(TAG, "error getting printwriter");
             }
@@ -408,12 +406,6 @@ public class GroupMessengerActivity extends Activity {
                     PrintWriter writer = new PrintWriter(client_socket.getOutputStream(), true);
                     writer.println(announce_final_message);
 
-                    /*try {
-                        Thread.sleep(10);
-                    } catch (InterruptedException e) {
-                        Log.e(TAG, "error with wait");
-                    }*/
-
                     writer.flush();
 
                     client_socket.setSoTimeout(1000);
@@ -437,7 +429,7 @@ public class GroupMessengerActivity extends Activity {
                     client_socket.close();
                 }
             } catch (UnknownHostException e) {
-                Log.e(TAG, "error connecting sockets for final message");
+                Log.e(TAG, "SEND_FINAL: unknown host error " + e.getMessage());
             } catch (IOException e) {
                 Log.e(TAG, "error connecting sockets for final message");
             }
@@ -517,20 +509,12 @@ public class GroupMessengerActivity extends Activity {
                         " target:" + get_pid_from_port(destination_port));
 
                 Socket client_socket;
-                //BufferedReader in;
-                //PrintWriter out;
                 try {
                     client_socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(destination_port));
 
                     PrintWriter out = new PrintWriter(client_socket.getOutputStream(), true);
                     out.println(message_wrapper);
-
-                    /*try {
-                        Thread.sleep(10);
-                    } catch (InterruptedException e) {
-                        Log.e(TAG, "error with wait");
-                    }*/
 
                     out.flush();
 
@@ -542,15 +526,20 @@ public class GroupMessengerActivity extends Activity {
                     if ((input = in.readLine()) != null) {
 
                         Log.d(TAG, "just got proposal back from server");
+
+                        out.close();
+                        in.close();
+                        client_socket.close();
+
                         handle_message_proposal(input);
 
                     } else {
-                        Log.d(TAG, "empty proposal from server");
-                    }
+                        Log.e(TAG, "empty proposal from server");
 
-                    out.close();
-                    in.close();
-                    client_socket.close();
+                        out.close();
+                        in.close();
+                        client_socket.close();
+                    }
 
                 } catch (SocketException e) {
                     Log.e(TAG, "Socket exception (timeout): " + e.getMessage());
