@@ -26,13 +26,19 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class GroupMessengerActivity extends Activity {
 
     private static int SERVER_PORT = 10000;
-    private static String[] CLIENT_PORTS = {"11108","11112","11116","11120","11124"};
+    //private static List<String> CLIENT_PORTS = Collections.synchronizedList(Arrays.asList("11108", "11112", "11116", "11120", "11124"));
+    private static List<String> CLIENT_PORTS = new ArrayList<String>(Arrays.asList("11108", "11112", "11116", "11120", "11124"));
+
     private static String MY_PORT;
 
     static final String TAG = GroupMessengerActivity.class.getSimpleName();
@@ -40,6 +46,7 @@ public class GroupMessengerActivity extends Activity {
     static final String BREAK_MSG_SEND = "!#!#!#";
     static final String BREAK_MSG_PROPOSAL = "!~!~!~";
     static final String BREAK_MSG_FINAL = "!@!@!@";
+    static final String ACK = "!@#$!@#$";
 
     final Uri uri = buildUri("content", "edu.buffalo.cse.cse486586.groupmessenger2.provider");
 
@@ -48,8 +55,6 @@ public class GroupMessengerActivity extends Activity {
     Queue<Message> debug_delivery_queue = new ConcurrentLinkedQueue<Message>();
 
     int current_message_id;
-    //int proposed_sequence_number;
-
 
     private void set_my_port() {
         TelephonyManager tel = (TelephonyManager) this.getSystemService(Context.TELEPHONY_SERVICE);
@@ -67,8 +72,8 @@ public class GroupMessengerActivity extends Activity {
 
 
     private int get_pid_from_port(String port) {
-        for (int i = 0; i < CLIENT_PORTS.length; i++) {
-            if (CLIENT_PORTS[i].equals(port)) { return i; }
+        for (int i = 0; i < CLIENT_PORTS.size(); i++) {
+            if (CLIENT_PORTS.get(i).equals(port)) { return i; }
         }
 
         // shouldn't return here
@@ -76,21 +81,37 @@ public class GroupMessengerActivity extends Activity {
     }
 
 
+    public synchronized void remove_client(String client) {
+        for ( int i = 0;  i < CLIENT_PORTS.size(); i++) {
+            String temp = CLIENT_PORTS.get(i);
+            if (temp.equals(client)) {
+                CLIENT_PORTS.remove(i);
+            }
+        }
+    }
+
+
     private void dump_handler() {
         final TextView tv = (TextView) findViewById(R.id.textView1);
         Cursor result = getContentResolver().query(uri, null, Integer.toString(0), null, null);
         if (result == null) {
-            Log.e(TAG, "empty curor returned");
+            Log.e(TAG, "empty cursor returned");
             return;
         }
 
+        tv.setText("");
+        tv.append("PID: " + get_pid_from_port(MY_PORT) + " PORT: " + MY_PORT + '\n');
         while (result.moveToNext()) {
+            int idIndex = result.getColumnIndex(Key_Value_Contract.UID);
             int keyIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_KEY);
             int valueIndex = result.getColumnIndex(Key_Value_Contract.COLUMN_VALUE);
+            String returnId = result.getString(idIndex);
             String returnKey = result.getString(keyIndex);
             String returnValue = result.getString(valueIndex);
 
-            tv.append(result.getPosition() + ": key is: " + returnKey + " value is: " + returnValue + '\n');
+            tv.append(result.getPosition() + ": id is: " + returnId +
+                    " key is: " + returnKey +
+                    " value is: " + returnValue + '\n');
         }
 
         result.close();
@@ -104,7 +125,7 @@ public class GroupMessengerActivity extends Activity {
 
     private void initialize_ui_elements() {
 
-        final TextView tv = (TextView) findViewById(R.id.textView1);
+        final TextView tv  = (TextView) findViewById(R.id.textView1);
         tv.setMovementMethod(new ScrollingMovementMethod());
 
         findViewById(R.id.button1).setOnClickListener(
@@ -216,7 +237,7 @@ public class GroupMessengerActivity extends Activity {
 
             int pid = get_pid_from_port(MY_PORT);
 
-            Log.d(TAG, Integer.toString(pid) + " HANDLE_SEND: " + message +
+            Log.d(TAG, "pid:" + Integer.toString(pid) + " HANDLE_SEND: " + message +
                     " sender_pid: " + sender_pid +
                     " sender_msg_id: " + sender_msg_id);
 
@@ -245,12 +266,13 @@ public class GroupMessengerActivity extends Activity {
 
             // send back the proposed sequence number
             try {
-                Log.d(TAG, "SENDER_HANDLER: sending back proposal: " + Integer.toString(proposed_msg_id) +
+                Log.d(TAG, "pid:" + Integer.toString(pid) + " RECEIVED_SEND: " + msg + " sending back proposal: " + Integer.toString(proposed_msg_id) +
                         " for sender_pid: " + sender_pid +
                         " sender_msg_id: " + sender_msg_id);
 
                 PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
                 writer.println(response_msg);
+                //writer.close();
             } catch (IOException e) {
                 Log.e(TAG, "error getting printwriter");
             }
@@ -258,7 +280,7 @@ public class GroupMessengerActivity extends Activity {
         }
 
 
-        public void handle_message_final(String message) {
+        public void handle_message_final(String message, Socket socket) {
             String[] msg_segs = message.split(BREAK_MSG_FINAL);
             int msg_id = Integer.parseInt(msg_segs[0]);
             int pid = Integer.parseInt(msg_segs[1]);
@@ -266,7 +288,14 @@ public class GroupMessengerActivity extends Activity {
 
             String my_pid = Integer.toString(get_pid_from_port(MY_PORT));
 
-
+            // send ACK for final message
+            try {
+                Log.d(TAG, "FINAL_HANDLER: sending ACK");
+                PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+                writer.println(ACK);
+            } catch (IOException e) {
+                Log.e(TAG, "error sending ACK");
+            }
 
             // find this message in the hold back queue
             Message final_message = get_msg_from_hold_back(pid, msg_id);
@@ -275,10 +304,11 @@ public class GroupMessengerActivity extends Activity {
                 return;
             }
 
-            Log.d(TAG, my_pid + " FINAL_HANDLER: " + final_message.getMessage() +
+            Log.d(TAG, "pid:" + my_pid + " FINAL_HANDLER: " + final_message.getMessage() +
                     " msg_id: " + msg_id +
-                    " ipd: " + pid +
+                    " pid: " + pid +
                     " final_seq_num: " + final_seq_num);
+
 
             hold_back_queue.remove(final_message);
             debug_delivery_queue.add(final_message);
@@ -291,6 +321,10 @@ public class GroupMessengerActivity extends Activity {
             if (result == null) {
                 Log.e(TAG, "error inserting value into content provider");
                 return;
+            } else {
+                Log.d(TAG, "pid:" + my_pid + " FINAL_HANDLER: inserted " + final_message.getMessage() +
+                        "with sequence: " + final_message.get_seq_num());
+                publishProgress(final_message.getMessage());
             }
             Log.d(TAG, result.toString());
 
@@ -321,18 +355,16 @@ public class GroupMessengerActivity extends Activity {
                         }*/
 
                         boolean is_send = message.contains(BREAK_MSG_SEND);
-                        //boolean is_proposal = message.contains(BREAK_MSG_PROPOSAL);
                         boolean is_final = message.contains(BREAK_MSG_FINAL);
 
                         if (is_send) {
                             handle_send(message, clientSocket);
                         } else if (is_final) {
-                            handle_message_final(message);
+                            handle_message_final(message, clientSocket);
                         }
 
-                        publishProgress(message);
+                        //publishProgress(message);
                     }
-
                 }
 
             } catch (NullPointerException err) {
@@ -345,7 +377,8 @@ public class GroupMessengerActivity extends Activity {
         }
 
         protected void onProgressUpdate(String... strings) {
-
+            final TextView tv  = (TextView) findViewById(R.id.textView1);
+            tv.append(strings[0] + '\n');
         }
 
     }
@@ -356,8 +389,8 @@ public class GroupMessengerActivity extends Activity {
 
         public void deliver_final_message(Message final_msg) {
 
-            Log.d(TAG, "delivering final message " + final_msg.get_message_id() +
-                    " with sequence number " + final_msg.get_seq_num());
+            Log.d(TAG, "DELIVERING_FINAL: " + final_msg.getMessage() +
+                    " sequence number: " + final_msg.get_seq_num());
 
             // send pid and msg_id as identifiers, and report final sequence id
             String announce_final_message =
@@ -368,21 +401,38 @@ public class GroupMessengerActivity extends Activity {
             // send out the final message
             try {
                 for (String destination_port : CLIENT_PORTS) {
-                    Log.d(TAG, "sending FINAL_MSG " + final_msg.get_message_id() +
-                            " to " + destination_port);
+                    Log.d(TAG, "pid:" + get_pid_from_port(MY_PORT) + " SEND_FINAL: " + final_msg.getMessage() +
+                            " to " + get_pid_from_port(destination_port));
                     Socket client_socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(destination_port));
                     PrintWriter writer = new PrintWriter(client_socket.getOutputStream(), true);
                     writer.println(announce_final_message);
 
-                    try {
+                    /*try {
                         Thread.sleep(10);
                     } catch (InterruptedException e) {
                         Log.e(TAG, "error with wait");
-                    }
+                    }*/
 
                     writer.flush();
 
+                    client_socket.setSoTimeout(1000);
+
+                    BufferedReader in = new BufferedReader(new InputStreamReader(client_socket.getInputStream()));
+                    String input;
+                    if ((input = in.readLine()) != null) {
+
+                        if (input.equals(ACK)) {
+                            Log.d(TAG, "SEND_FINAL: " + final_msg.getMessage() +
+                                " server ACKed back");
+                        }
+
+                    } else {
+                        Log.d(TAG, "SEND_FINAL: " + final_msg.getMessage() + " no ACK from server, resending...");
+                        writer.println(announce_final_message);
+                    }
+
+                    writer.flush();
                     writer.close();
                     client_socket.close();
                 }
@@ -404,15 +454,15 @@ public class GroupMessengerActivity extends Activity {
 
             int my_pid = get_pid_from_port(MY_PORT);
 
-            Log.d(TAG, Integer.toString(my_pid) + " HANDLE_PROPOSAL FROM " +
-                    Integer.toString(responder_pid) + " : " +
-                    message + " with proposal sequence " + proposed_msg_id);
-
             Message new_message = get_msg_from_hold_back(my_pid, Integer.parseInt(sender_msg_id));
             if (new_message == null) {
                 Log.e(TAG, "sent message could not be found in hold-back_queue");
                 return;
             }
+
+            Log.d(TAG, "pid:" + Integer.toString(my_pid) + " HANDLE_PROPOSAL: " + new_message.getMessage() +
+                    " FROM " + Integer.toString(responder_pid) +
+                    " proposal_sequence: " + proposed_msg_id);
 
             // check if proposed id is higher than current seq_num
             if (Integer.parseInt(proposed_msg_id) > new_message.get_seq_num()) {
@@ -424,7 +474,7 @@ public class GroupMessengerActivity extends Activity {
             delivery_status |= 1 << responder_pid;
             new_message.set_delivery_status(delivery_status);
 
-            Log.d(TAG, "new delivery status is: " + delivery_status);
+            Log.d(TAG, "new delivery status is: " + delivery_status + " responder pid was: " + responder_pid);
 
             // check if all clients have responded with proposal
             if (new_message.is_deliverable()) {
@@ -455,13 +505,16 @@ public class GroupMessengerActivity extends Activity {
 
             hold_back_queue.add(new_message);
 
-            for (String destination_port : CLIENT_PORTS) {
+            List<String> clients_copy = new ArrayList<String>(CLIENT_PORTS);
+
+            for (String destination_port : clients_copy) {
 
                 String message_wrapper = message + BREAK_MSG_SEND +
                         Integer.toString(get_pid_from_port(MY_PORT)) + BREAK_MSG_SEND +
                         msg_id + BREAK_MSG_SEND;
 
-                Log.d(TAG, MY_PORT + " sending message to " + destination_port + " message is: " + message);
+                Log.d(TAG, "pid:" + get_pid_from_port(MY_PORT) + " SEND_MESSAGE: " + message +
+                        " target:" + get_pid_from_port(destination_port));
 
                 Socket client_socket;
                 //BufferedReader in;
@@ -473,16 +526,16 @@ public class GroupMessengerActivity extends Activity {
                     PrintWriter out = new PrintWriter(client_socket.getOutputStream(), true);
                     out.println(message_wrapper);
 
-                    try {
+                    /*try {
                         Thread.sleep(10);
                     } catch (InterruptedException e) {
                         Log.e(TAG, "error with wait");
-                    }
+                    }*/
 
                     out.flush();
 
                     // set 500ms timeout for response
-                    client_socket.setSoTimeout(3000);
+                    client_socket.setSoTimeout(2200);
 
                     BufferedReader in = new BufferedReader(new InputStreamReader(client_socket.getInputStream()));
                     String input;
@@ -502,10 +555,11 @@ public class GroupMessengerActivity extends Activity {
                 } catch (SocketException e) {
                     Log.e(TAG, "Socket exception (timeout): " + e.getMessage());
                 } catch (SocketTimeoutException e) {
-                    Log.e(TAG, "timeout exception: " +
-                            " msg_id: " + msg_id +
+                    Log.e(TAG, "pid:" + Integer.toString(get_pid_from_port(MY_PORT)) +
+                            " SEND_MSG_TIMEOUT: " + message +
                             " destination: " + get_pid_from_port(destination_port));
-                    // todo Timeouts need to be handled
+                    // remove port from loop
+                    //remove_client(destination_port);
                 } catch (IOException e) {
                     Log.e(TAG, "io exception connecting client socket: " + e.getMessage());
                     return null;
